@@ -1,6 +1,5 @@
 import { messaging, firebaseConfig, app } from './firebase';
 import { getToken, onMessage, isSupported } from 'firebase/messaging';
-import { supabase } from './supabase';
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || 'YOUR_VAPID_KEY_HERE';
 
@@ -60,12 +59,15 @@ async function saveTokenToSupabase(userId: string, token: string) {
     // Attempt to upsert the token into a `fcm_tokens` table.
     // Ensure this table exists in your Supabase project:
     // create table fcm_tokens ( id serial primary key, user_id uuid not null, token text not null unique );
-    const { error } = await supabase
-      .from('fcm_tokens')
-      .upsert({ user_id: userId, token }, { onConflict: 'token' });
+    const res = await fetch('/api/db/fcm-tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, token })
+    });
+    const data = await res.json();
 
-    if (error) {
-      console.warn('Could not save FCM token to Supabase. Ensure table "fcm_tokens" exists.', error);
+    if (!res.ok || data.error) {
+      console.warn('Could not save FCM token. Ensure table "fcm_tokens" exists.', data.error);
     }
   } catch (e) {
     console.error('Error saving FCM Token', e);

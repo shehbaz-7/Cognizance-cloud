@@ -1,0 +1,8 @@
+aws_region         = "ap-south-2"
+project_name       = "cognizance"
+environment        = "prod"
+db_name            = "cognizance_db"
+db_username        = "cognizance_user"
+ec2_instance_type  = "t3.micro"
+rds_instance_class = "db.t3.micro"
+allowed_ssh_cidr   = ["YOUR_IP_ADDRESS/32"] # Replace with your IP for secure SSH access

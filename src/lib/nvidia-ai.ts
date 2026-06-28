@@ -8,14 +8,57 @@ export interface LocalChatMessage {
   content: string;
 }
 
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+
 const NVIDIA_BASE = "https://integrate.api.nvidia.com/v1";
 const NVIDIA_MODEL = "meta/llama-3.1-8b-instruct";
+
+let cachedApiKey: string | null = null;
+
+async function getNvidiaApiKey(): Promise<string> {
+  // If set directly via env (local dev), use it
+  if (process.env.NVIDIA_API_KEY) {
+    return process.env.NVIDIA_API_KEY;
+  }
+  
+  if (cachedApiKey) {
+    return cachedApiKey;
+  }
+
+  const secretName = process.env.APP_CONFIG_SECRET_NAME;
+  const region = process.env.AWS_REGION || 'ap-south-2';
+
+  if (!secretName) {
+    throw new Error("NO_NVIDIA_KEY (NVIDIA_API_KEY and APP_CONFIG_SECRET_NAME are both missing)");
+  }
+
+  const client = new SecretsManagerClient({ region });
+  try {
+    const response = await client.send(
+      new GetSecretValueCommand({
+        SecretId: secretName,
+      })
+    );
+    if (response.SecretString) {
+      const config = JSON.parse(response.SecretString);
+      cachedApiKey = config.NVIDIA_API_KEY || null;
+      if (!cachedApiKey) {
+        throw new Error("NVIDIA_API_KEY not found in secret JSON");
+      }
+      return cachedApiKey;
+    }
+    throw new Error('Secret string is empty');
+  } catch (error) {
+    console.error('Error fetching NVIDIA API key from Secrets Manager', error);
+    throw error;
+  }
+}
 
 export async function nimChat(
   messages: LocalChatMessage[],
   options: { maxTokens?: number; temperature?: number } = {}
 ): Promise<string> {
-  const apiKey = process.env.NVIDIA_API_KEY;
+  const apiKey = await getNvidiaApiKey();
   if (!apiKey) throw new Error("NO_NVIDIA_KEY");
 
   const res = await fetch(`${NVIDIA_BASE}/chat/completions`, {

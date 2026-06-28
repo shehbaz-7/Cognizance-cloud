@@ -5,7 +5,6 @@ import type { Skill, QuizAttempt, SavedRevision } from "./types";
 import { RetentionEngine } from "./retention-engine";
 import { auth } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { supabase } from "./supabase";
 
 // ─── Context Type ─────────────────────────────────────────────────────────────
 
@@ -75,20 +74,17 @@ export function SkillProvider({ children }: { children: ReactNode }) {
       if (uid) {
         setIsSyncing(true);
         try {
-          const { data, error } = await supabase
-            .from('user_skills')
-            .select('skills')
-            .eq('user_id', uid)
-            .single();
+          const res = await fetch(`/api/db/skills?userId=${uid}`);
+          const data = await res.json();
 
-          if (error && error.code !== 'PGRST116') {
-             console.error("Cloud fetch error:", error);
+          if (data?.error && data.error !== 'PGRST116') {
+             console.error("Cloud fetch error:", data.error);
           } else if (data?.skills) {
              // Cloud data exists, it takes priority
              setSkills(data.skills);
           } else if (local.length > 0) {
              // No cloud data but local data exists, sync it up
-             await supabase.from('user_skills').upsert({ user_id: uid, skills: local });
+             await fetch('/api/db/skills', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, skills: local }) });
              setSkills(local);
           } else {
              setSkills([]);
@@ -119,7 +115,7 @@ export function SkillProvider({ children }: { children: ReactNode }) {
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = setTimeout(async () => {
         try {
-          await supabase.from('user_skills').upsert({ user_id: uid, skills: skills });
+          await fetch('/api/db/skills', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, skills: skills }) });
         } catch (e) {
           console.warn("Background cloud sync failed", e);
         }

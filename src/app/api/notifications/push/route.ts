@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminMessaging } from '@/lib/firebase-admin';
-import { supabase } from '@/lib/supabase';
+import { query } from '@/lib/db';
 
 // Helper to send a notification to a specific user
 export async function POST(req: Request) {
@@ -17,12 +17,13 @@ export async function POST(req: Request) {
     }
 
     // 1. Fetch user's devices
-    const { data: tokensError, error } = await supabase
-      .from('fcm_tokens')
-      .select('token')
-      .eq('user_id', userId);
+    const tokensResult = await query(
+      'SELECT token FROM fcm_tokens WHERE user_id = $1',
+      [userId]
+    );
+    const tokensError = tokensResult.rows;
 
-    if (error || !tokensError || tokensError.length === 0) {
+    if (!tokensError || tokensError.length === 0) {
       return NextResponse.json({ error: 'No active device tokens found for user' }, { status: 404 });
     }
 
@@ -50,7 +51,10 @@ export async function POST(req: Request) {
     });
 
     if (failedTokens.length > 0) {
-      await supabase.from('fcm_tokens').delete().in('token', failedTokens);
+      await query(
+        'DELETE FROM fcm_tokens WHERE token = ANY($1::text[])',
+        [failedTokens]
+      );
     }
 
     return NextResponse.json({ 

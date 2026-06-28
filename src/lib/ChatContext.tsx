@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode, useRef } from "react";
 import { auth } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { supabase } from "./supabase";
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -35,12 +34,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('user_chats')
-          .select('skill_id, type, messages')
-          .eq('user_id', user.uid);
-
-        if (error) throw error;
+        const res = await fetch(`/api/db/chats?userId=${user.uid}`);
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to load chats');
+        }
+        const data = await res.json();
 
         const chatMap: Record<string, ChatMessage[]> = {};
         data?.forEach((chat: any) => {
@@ -69,13 +68,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     if (user) {
       try {
-        await supabase.from('user_chats').upsert({
-          user_id: user.uid,
-          skill_id: skillId || null,
-          type,
-          messages,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id, skill_id, type' });
+        await fetch('/api/db/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.uid,
+            skill_id: skillId || null,
+            type,
+            messages
+          })
+        });
       } catch (err) {
         console.error("Failed to sync chat to cloud", err);
       }

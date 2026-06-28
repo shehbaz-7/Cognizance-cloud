@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { query } from '@/lib/db';
 import { RetentionEngine } from '@/lib/retention-engine';
 import { adminMessaging } from '@/lib/firebase-admin';
 
@@ -16,7 +16,8 @@ export async function GET(req: Request) {
     }
 
     // 1. Fetch all users who have registered FCM tokens
-    const { data: usersWithTokens } = await supabase.from('fcm_tokens').select('user_id, token');
+    const tokensResult = await query('SELECT user_id, token FROM fcm_tokens');
+    const usersWithTokens = tokensResult.rows;
     if (!usersWithTokens || usersWithTokens.length === 0) {
       return NextResponse.json({ success: true, message: 'No registered devices' });
     }
@@ -30,10 +31,11 @@ export async function GET(req: Request) {
 
     // 2. Fetch skill data for those users to analyze retention
     const userIds = Object.keys(userTokensMap);
-    const { data: userSkills } = await supabase
-      .from('user_skills')
-      .select('user_id, skills')
-      .in('user_id', userIds);
+    const skillsResult = await query(
+      'SELECT user_id, skills FROM user_skills WHERE user_id = ANY($1::text[])',
+      [userIds]
+    );
+    const userSkills = skillsResult.rows;
 
     let sentPushes = 0;
 
