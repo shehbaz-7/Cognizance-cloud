@@ -14,8 +14,35 @@ export const firebaseConfig = {
 };
 
 // Initialize Firebase (SSR friendly)
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
+let app: any = null;
+let auth: any = null;
+
+const mockAuth: any = {
+  currentUser: null,
+  onAuthStateChanged: (callback: any) => {
+    callback(null);
+    return () => {};
+  },
+  onIdTokenChanged: (callback: any) => {
+    callback(null);
+    return () => {};
+  }
+};
+
+const isValidConfig = firebaseConfig.apiKey && firebaseConfig.apiKey !== "placeholder" && firebaseConfig.apiKey.trim() !== "";
+
+if (isValidConfig) {
+  try {
+    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+  } catch (error) {
+    console.error("Firebase client initialization error, falling back to mock auth:", error);
+    auth = mockAuth;
+  }
+} else {
+  console.warn("Firebase client API key is missing or placeholder. Firebase Auth will operate in offline/mock mode.");
+  auth = mockAuth;
+}
 
 // Providers
 const googleProvider = new GoogleAuthProvider();
@@ -24,7 +51,7 @@ const githubProvider = new GithubAuthProvider();
 const microsoftProvider = new OAuthProvider('microsoft.com');
 
 // Initialize Analytics (Browser-only)
-if (typeof window !== "undefined") {
+if (app && typeof window !== "undefined") {
   isSupported().then((supported) => {
     if (supported) getAnalytics(app);
   });
@@ -32,7 +59,7 @@ if (typeof window !== "undefined") {
 
 // Initialize Messaging lazily (Browser-only)
 let messaging: Messaging | null = null;
-if (typeof window !== "undefined" && typeof navigator !== "undefined") {
+if (app && typeof window !== "undefined" && typeof navigator !== "undefined") {
   isMessagingSupported().then((supported) => {
     if (supported) {
       messaging = getMessaging(app);
